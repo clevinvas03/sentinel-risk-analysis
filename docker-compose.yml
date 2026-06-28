@@ -1,0 +1,27 @@
+services:
+  db:
+    # Custom image = PostGIS (parcel geometry/adjacency) + pgvector (KB embeddings).
+    build:
+      context: .
+      dockerfile: db/Dockerfile
+    image: dc-risk-db:postgis-pgvector
+    container_name: dc-risk-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: risk
+    # Host 5433 -> container 5432 to avoid clashing with a local Postgres on 5432.
+    ports:
+      - "5433:5432"
+    volumes:
+      - dc_risk_pgdata:/var/lib/postgresql/data
+      # Schema is applied automatically on first boot of an empty volume.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d risk"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dc_risk_pgdata:
