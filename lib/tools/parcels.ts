@@ -220,7 +220,14 @@ export const searchParcels: ToolHandler = async (input, ctx) => {
     ctx.emitTrace("Parcels: fetching live from county FeatureServer");
     const raw = await queryParcels(slug, criteria, log);
     const enriched = await enrichAndCache(slug, raw, "live");
-    await recordQueryCache(slug, hash, criteria, enriched.map((p) => p.apn).filter(Boolean));
+    // Recording the query cache is best-effort — a missing/unreachable DB (e.g. a
+    // serverless deploy with no database) must not fail an otherwise-successful
+    // live fetch.
+    try {
+      await recordQueryCache(slug, hash, criteria, enriched.map((p) => p.apn).filter(Boolean));
+    } catch (e) {
+      console.error("recordQueryCache failed (non-fatal):", e);
+    }
     addParcelSources(enriched, cfg, slug, true, ctx);
 
     return JSON.stringify({

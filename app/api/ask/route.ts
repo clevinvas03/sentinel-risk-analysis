@@ -3,7 +3,9 @@ import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// 60s is the Vercel free-tier ceiling for a serverless function. The agent can run
+// longer on a complex question; raise this (and use a paid plan) if you deploy there.
+export const maxDuration = 60;
 
 // POST { question } -> Server-Sent Events stream of agent trace + answer tokens.
 export async function POST(req: Request) {
