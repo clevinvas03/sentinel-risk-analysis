@@ -29,7 +29,24 @@ export const searchKnowledgeBase: ToolHandler = async (input, ctx) => {
 
   ctx.emitTrace("Searching knowledge base", q);
 
-  const vec = await embedQuery(q);
+  // The query embedding needs the Python embedding service. If it (or the DB below)
+  // is unreachable — e.g. a serverless deploy with no backend — tell the model the
+  // KB is unavailable and to STOP retrying, rather than letting it loop to the
+  // iteration cap.
+  const UNAVAILABLE =
+    "The internal knowledge base is unavailable in this deployment (its database / " +
+    "embedding service is not reachable). Do NOT call search_knowledge_base again. " +
+    "Answer the user from the other tools (geocode, site risk, compare) and your own " +
+    "domain expertise, and clearly tell them that internal knowledge-base sources are " +
+    "not available in this hosted environment.";
+
+  let vec: number[];
+  try {
+    vec = await embedQuery(q);
+  } catch (e: any) {
+    ctx.emitTrace("Knowledge base unavailable", "embedding service unreachable");
+    return JSON.stringify({ unavailable: true, instruction: UNAVAILABLE });
+  }
 
   const where: string[] = [];
   const params: unknown[] = [toVectorLiteral(vec)];
@@ -62,9 +79,8 @@ export const searchKnowledgeBase: ToolHandler = async (input, ctx) => {
   try {
     rows = await query<Row>(sql, params);
   } catch (e: any) {
-    return JSON.stringify({
-      error: `knowledge base query failed: ${e?.message ?? e}`,
-    });
+    ctx.emitTrace("Knowledge base unavailable", "database unreachable");
+    return JSON.stringify({ unavailable: true, instruction: UNAVAILABLE });
   }
 
   if (rows.length === 0) {

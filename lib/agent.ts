@@ -21,6 +21,7 @@ Strategy guidance (you decide — there is no fixed routing):
 - For a specific location, geocode it then fetch structured site risk data. For comparisons, use compare_sites.
 - For questions about land ownership, parcel size, land use/zoning, or campus assembly, use the parcel tools (search_parcels, get_parcel, find_adjacent_parcels). They query LIVE county assessor data. search_parcels checks the match count first — if it reports too many matches, narrow the criteria rather than forcing a large fetch. If a parcel tool returns OFFLINE SAMPLE data (because the live county endpoint was unreachable), explicitly tell the user the parcels are illustrative samples, not current assessor records.
 - Keep calling tools until you have enough evidence, then write the answer.
+- Do not call the same tool with the same input repeatedly. If a tool reports it is unavailable or returns an error, do NOT keep retrying it — use the information you already have, answer the most useful version of the question, and state the limitation honestly (e.g. that knowledge-base or web sources aren't available here). Always produce a final answer; never give up just because one source is unavailable.
 - Cite sources inline as footnote-style markers like [1], [2] that correspond to the sources you actually consulted, and end with the key takeaway.
 - If a question is clearly outside data centre site risk (e.g. trivia like "capital of France"), politely say it's outside your domain and offer what you can help with instead — do not fabricate.`;
 
