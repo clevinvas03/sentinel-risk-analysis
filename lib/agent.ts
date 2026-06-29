@@ -7,7 +7,7 @@ import {
 } from "./tools";
 import type { Source, ToolContext } from "./tools/types";
 
-const MAX_ITERATIONS = 15;
+const MAX_ITERATIONS = 20;
 
 export const SYSTEM_PROMPT = `You are an expert data centre site risk analyst. You can answer ANY question related to data centre development risk — including flood, seismic, climate, grid/power, cooling, water, planning and permitting, geopolitics, jurisdiction, cost, latency, connectivity, supply chain, labour, and sustainability.
 
@@ -221,9 +221,49 @@ export async function runAgent(
     }
 
     if (!finalAnswer) {
-      finalAnswer =
-        "I wasn't able to reach a grounded answer within my tool budget. Please try rephrasing or narrowing the question.";
-      emit({ type: "token", text: finalAnswer });
+      // The loop hit its iteration cap while still calling tools. Rather than give
+      // up, force one final synthesis from everything already gathered — no tools,
+      // so the model must write the answer.
+      ctx.emitTrace("Synthesising final answer", "tool budget reached");
+      emit({ type: "answer_reset" });
+      messages.push({
+        role: "user",
+        content:
+          "You have reached your tool-call budget — do not call any more tools. Using only " +
+          "the information already gathered above, write your best grounded answer to the " +
+          "original question now. Cite the sources you actually used and note any limitations.",
+      });
+      try {
+        const finalStream = client.messages.stream({
+          model: AGENT_MODEL,
+          max_tokens: 8000,
+          ...(IS_ANTHROPIC
+            ? { thinking: { type: "adaptive", display: "summarized" } as const }
+            : {}),
+          system: SYSTEM_PROMPT,
+          messages,
+        });
+        let t = "";
+        for await (const ev of finalStream) {
+          if (
+            ev.type === "content_block_delta" &&
+            (ev.delta as any).type === "text_delta"
+          ) {
+            const txt = (ev.delta as any).text as string;
+            t += txt;
+            emit({ type: "token", text: txt });
+          }
+        }
+        await finalStream.finalMessage();
+        finalAnswer = t.trim();
+      } catch {
+        /* fall through to the canned message */
+      }
+      if (!finalAnswer) {
+        finalAnswer =
+          "I gathered relevant data but couldn't compose a full answer in time. Please try rephrasing or narrowing the question.";
+        emit({ type: "token", text: finalAnswer });
+      }
     }
 
     const deduped = dedupeSources(sources);
